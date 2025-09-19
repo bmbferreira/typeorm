@@ -76,22 +76,7 @@ export class MigrationExecutor {
             const tempQueryRunner = this.connection.createQueryRunner()
 
             try {
-                await this.createMigrationsTableIfNotExist(tempQueryRunner)
-
-                // create typeorm_metadata table if it's not created yet
-                const schemaBuilder =
-                    this.connection.driver.createSchemaBuilder()
-                if (InstanceChecker.isRdbmsSchemaBuilder(schemaBuilder)) {
-                    await schemaBuilder.createMetadataTableIfNecessary(
-                        tempQueryRunner,
-                    )
-                }
-
-                await tempQueryRunner.beforeMigration()
-                await (migration.instance as any).up(tempQueryRunner)
-                await tempQueryRunner.afterMigration()
-                await this.insertExecutedMigration(tempQueryRunner, migration)
-
+                await this.runMigrationCore(tempQueryRunner, migration)
                 return migration
             } finally {
                 await tempQueryRunner.release()
@@ -99,19 +84,7 @@ export class MigrationExecutor {
         }
 
         return this.withQueryRunner(async (queryRunner) => {
-            await this.createMigrationsTableIfNotExist(queryRunner)
-
-            // create typeorm_metadata table if it's not created yet
-            const schemaBuilder = this.connection.driver.createSchemaBuilder()
-            if (InstanceChecker.isRdbmsSchemaBuilder(schemaBuilder)) {
-                await schemaBuilder.createMetadataTableIfNecessary(queryRunner)
-            }
-
-            await queryRunner.beforeMigration()
-            await (migration.instance as any).up(queryRunner)
-            await queryRunner.afterMigration()
-            await this.insertExecutedMigration(queryRunner, migration)
-
+            await this.runMigrationCore(queryRunner, migration)
             return migration
         })
     }
@@ -586,6 +559,24 @@ export class MigrationExecutor {
     // -------------------------------------------------------------------------
     // Protected Methods
     // -------------------------------------------------------------------------
+
+    protected async runMigrationCore(
+        queryRunner: QueryRunner,
+        migration: Migration,
+    ): Promise<void> {
+        await this.createMigrationsTableIfNotExist(queryRunner)
+
+        // create typeorm_metadata table if it's not created yet
+        const schemaBuilder = this.connection.driver.createSchemaBuilder()
+        if (InstanceChecker.isRdbmsSchemaBuilder(schemaBuilder)) {
+            await schemaBuilder.createMetadataTableIfNecessary(queryRunner)
+        }
+
+        await queryRunner.beforeMigration()
+        await (migration.instance as any).up(queryRunner)
+        await queryRunner.afterMigration()
+        await this.insertExecutedMigration(queryRunner, migration)
+    }
 
     /**
      * Creates table "migrations" that will store information about executed migrations.
